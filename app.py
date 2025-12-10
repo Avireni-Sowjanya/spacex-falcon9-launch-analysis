@@ -11,7 +11,46 @@ spacex_df = pd.read_csv("dataset_part_2.csv")
 max_payload = spacex_df['PayloadMass'].max()
 min_payload = spacex_df['PayloadMass'].min()
 
-# Create Dash app
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import accuracy_score
+
+# Encode Categorical Columns
+le_site = LabelEncoder()
+le_booster = LabelEncoder()
+le_orbit = LabelEncoder()
+
+spacex_df['LaunchSite_enc'] = le_site.fit_transform(spacex_df['LaunchSite'])
+spacex_df['BoosterVersion_enc'] = le_booster.fit_transform(spacex_df['BoosterVersion'])
+spacex_df['Orbit_enc'] = le_orbit.fit_transform(spacex_df['Orbit'])
+
+# Features and Target
+X = spacex_df[['PayloadMass', 'LaunchSite_enc', 'BoosterVersion_enc', 'Orbit_enc']]
+y = spacex_df['Class']
+
+# Split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Logistic Regression
+log_model = LogisticRegression()
+log_model.fit(X_train, y_train)
+log_pred = log_model.predict(X_test)
+log_accuracy = accuracy_score(y_test, log_pred)
+print("Logistic Regression Accuracy:", log_accuracy)
+
+# Decision Tree
+tree_model = DecisionTreeClassifier(max_depth=5)
+tree_model.fit(X_train, y_train)
+tree_pred = tree_model.predict(X_test)
+tree_accuracy = accuracy_score(y_test, tree_pred)
+print("Decision Tree Accuracy:", tree_accuracy)
+
+# -----------------------------
+# DASH APP STARTS
+# -----------------------------
+
 app = dash.Dash(__name__)
 
 # App Layout
@@ -19,7 +58,6 @@ app.layout = html.Div([
     html.H1('SpaceX Launch Records Dashboard',
             style={'textAlign': 'center', 'color': '#503D36', 'font-size': 40}),
     
-    # Dropdown
     dcc.Dropdown(
         id='site-dropdown',
         options=[{'label': 'All Sites', 'value': 'ALL'}] +
@@ -30,13 +68,11 @@ app.layout = html.Div([
     ),
     html.Br(),
 
-    # Pie Chart
     dcc.Graph(id='success-pie-chart'),
     html.Br(),
 
     html.P("Payload Range (kg):"),
 
-    # Payload Slider
     dcc.RangeSlider(
         id='payload-slider',
         min=min_payload,
@@ -48,11 +84,10 @@ app.layout = html.Div([
     ),
     html.Br(),
 
-    # Scatter Chart
     dcc.Graph(id='success-payload-scatter-chart')
 ])
 
-# Callback for Pie Chart
+# Pie Chart Callback
 @app.callback(
     Output('success-pie-chart', 'figure'),
     Input('site-dropdown', 'value')
@@ -63,8 +98,8 @@ def get_pie_chart(selected_site):
         fig = px.pie(
             spacex_df,
             names='LaunchSite',
-            title='Total Success Launches by Site',
-            values='Class'   # counts 1's
+            values='Class',
+            title='Total Success Launches by Site'
         )
     else:
         filtered_df = spacex_df[spacex_df['LaunchSite'] == selected_site]
@@ -75,7 +110,7 @@ def get_pie_chart(selected_site):
         )
     return fig
 
-# Callback for Scatter Plot
+# Scatter Plot Callback
 @app.callback(
     Output('success-payload-scatter-chart', 'figure'),
     [Input('site-dropdown', 'value'),
@@ -85,10 +120,8 @@ def update_scatter(selected_site, payload_range):
 
     low, high = payload_range
 
-    # Filter by payload
     df = spacex_df[(spacex_df['PayloadMass'] >= low) & (spacex_df['PayloadMass'] <= high)]
 
-    # Filter by launch site
     if selected_site != 'ALL':
         df = df[df['LaunchSite'] == selected_site]
 
